@@ -12,7 +12,7 @@
  
 ##Game Description:
 Tic-tac-toe (also known as Noughts and crosses or Xs and Os) is a game for two players, X and O, who take turns marking the spaces in a 3×3 grid. The player who succeeds in placing three of their marks in a horizontal, vertical, or diagonal row wins the game.
-Many different Guess a Number games can be played by many different Users at any
+Many different games can be played by many different Users at any
 given time. Each game can be retrieved or played by using the path parameter
 `urlsafe_game_key`.
 
