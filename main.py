@@ -2,8 +2,6 @@
 
 """main.py - This file contains handlers that are called by taskqueue and/or
 cronjobs."""
-import logging
-
 import webapp2
 from google.appengine.api import mail, app_identity
 from api import TicTacToeApi
@@ -14,7 +12,7 @@ from models import User
 class SendReminderEmail(webapp2.RequestHandler):
     def get(self):
         """Send a reminder email to each User with an email about games.
-        Called every hour using a cron job"""
+        Called every day using a cron job"""
         app_id = app_identity.get_application_id()
         users = User.query(User.email != None and User.email_remainder==True)
         for user in users:

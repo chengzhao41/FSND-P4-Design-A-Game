@@ -4,18 +4,19 @@ This can also contain game logic. For more complex games it would be wise to
 move game logic to another file. Ideally the API will be simple, concerned
 primarily with communication to/from the API's users."""
 
-import logging
 import endpoints
 from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 
 from models import User, Game, Score
-from models import StringMessage, NewGameForm, GameForm, MakeMoveForm,\
-    ScoreForms, EmailPreferenceForm
+from models import StringMessage, NewGameForm, GameForm, GameForms, MakeMoveForm,\
+    ScoreForms, EmailPreferenceForm, RankingForm
 from utils import get_by_urlsafe
 
+
 import collections
+import operator
 
 NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
 GET_GAME_REQUEST = endpoints.ResourceContainer(
@@ -112,12 +113,48 @@ class TicTacToeApi(remote.Service):
         """Return the current game state."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
-            if game.moves % 2 == 0:
+            if game.moves % 2 == 0 :
                 return game.to_form('It is player1 {} to make a move!'.format(game.user1.get().name))
             else:
                 return game.to_form('It is player2 {} to make a move!'.format(game.user2.get().name))
         else:
             raise endpoints.NotFoundException('Game not found!')
+
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=StringMessage,
+                      path='game/{urlsafe_game_key}/cancel',
+                      name='cancel_game',
+                      http_method='GET')
+    def cancel_game(self, request):
+        """Deletes the game, if it is unfished."""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        if not game:
+            raise endpoints.NotFoundException('Game not found!')
+        if game.game_over:
+            raise endpoints.ConflictException('Game is already over, therefore cannot be deleted!')
+        game.key.delete()
+        return StringMessage(message='Game {} has been deleted!'.format(
+                request.urlsafe_game_key))
+
+    @endpoints.method(request_message=USER_REQUEST,
+                      response_message=GameForms,
+                      path='game/user/{user_name}',
+                      name='get_user_games',
+                      http_method='GET')
+    def get_user_games(self, request):
+        """Return the state for all games for the provided user."""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException(
+                    'A User with that name does not exist!')
+        games = Game.query(ndb.OR(user1=user.key, user2=user.key))
+        game_forms = list()
+        for game in games:
+            if game.moves % 2 == 0:
+                game_forms.add(game.to_form('It is player1 {} to make a move!'.format(game.user1.get().name)))
+            else:
+                game_forms.add(game.to_form('It is player2 {} to make a move!'.format(game.user2.get().name)))
+        return GameForms(items=game_forms)
 
     @endpoints.method(request_message=MAKE_MOVE_REQUEST,
                       response_message=GameForm,
@@ -301,6 +338,40 @@ class TicTacToeApi(remote.Service):
         scores = Score.query(Score.user == user.key)
         return ScoreForms(items=[score.to_form() for score in scores])
 
+    @endpoints.method(request_message=USER_REQUEST,
+                      response_message=RankingForm,
+                      path='scores/user/{user_name}/ranking',
+                      name='get_user_rankings',
+                      http_method='GET')
+    def get_user_rankings(self, request):
+        """Returns an individual User's ranking"""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException(
+                    'A User with that name does not exist!')
+        scores = Score.query()
+        user_to_stats = {}
+        wins = 0
+        losses = 0
+        for score in scores:
+            if score.user not in user_to_stats:
+                user_to_stats[score.user] = {'wins':0, 'losses':0, 'games':0}
+            if score.won == True:
+                user_to_stats[score.user]['wins'] = user_to_stats[score.user]['wins'] + 1
+            elif score.lost == True:
+                user_to_stats[score.user]['losses'] = user_to_stats[score.user]['losses'] + 1
+            user_to_stats[score.user]['games'] = user_to_stats[score.user]['games'] + 1
+
+        # calculate the net_win_ratio
+        user_to_ratio = {}
+        for user in user_to_stats:
+            user_to_ratio[user] = (user_to_stats[user]['wins'] - user_to_stats[user]['losses']) / float(user_to_stats[score.user]['games'])
+
+        # rank users by ratio
+        ranked_users = sorted(user_to_ratio, key=user_to_ratio.get, reverse=True)
+
+        return RankingForm(user_name=request.user_name, rank=ranked_users.index(user) + 1, net_win_ratio=user_to_ratio[user])
+
     @endpoints.method(response_message=StringMessage,
                       path='games/average_moves_per_game',
                       name='get_average_moves_per_game',
@@ -316,8 +387,7 @@ class TicTacToeApi(remote.Service):
         games = Game.query(Game.game_over == True).fetch()
         if games:
             count = len(games)
-            total_moves = sum([game.moves
-                                        for game in games])
+            total_moves = sum([game.moves for game in games])
             average = float(total_moves)/count
             memcache.set(MEMCACHE_AVERAGE_MOVES_PER_GAME,
                          'The average moves made in finsihed games is {:.2f}'.format(average))

@@ -92,6 +92,11 @@ class GameForm(messages.Message):
     user_name2 = messages.StringField(6, required=True)
 
 
+class GameForms(messages.Message):
+    """Return multiple GameForms"""
+    game_form = messages.MessageField(GameForm, 1, repeated=True)
+
+
 class NewGameForm(messages.Message):
     """Used to create a new game"""
     user_name1 = messages.StringField(1, required=True)
@@ -101,6 +106,13 @@ class NewGameForm(messages.Message):
 class MakeMoveForm(messages.Message):
     """Used to make a move in an existing game"""
     move = messages.StringField(1, required=True)
+
+
+class RankingForm(messages.Message):
+    """RankingForm for outbound Ranking information"""
+    user_name = messages.StringField(1, required=True)
+    rank = messages.IntegerField(2, required=True)
+    net_win_ratio = messages.FloatField(3, required=True)
 
 
 class ScoreForm(messages.Message):
