@@ -8,6 +8,7 @@ import endpoints
 from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
+from google.appengine.ext import ndb
 
 from models import User, Game, Score
 from models import StringMessage, NewGameForm, GameForm, GameForms, MakeMoveForm,\
@@ -147,14 +148,14 @@ class TicTacToeApi(remote.Service):
         if not user:
             raise endpoints.NotFoundException(
                     'A User with that name does not exist!')
-        games = Game.query(ndb.OR(user1=user.key, user2=user.key))
+        games = Game.query(ndb.OR(Game.user1 == user.key, Game.user2 == user.key))
         game_forms = list()
         for game in games:
             if game.moves % 2 == 0:
-                game_forms.add(game.to_form('It is player1 {} to make a move!'.format(game.user1.get().name)))
+                game_forms.append(game.to_form('It is player1 {} to make a move!'.format(game.user1.get().name)))
             else:
-                game_forms.add(game.to_form('It is player2 {} to make a move!'.format(game.user2.get().name)))
-        return GameForms(items=game_forms)
+                game_forms.append(game.to_form('It is player2 {} to make a move!'.format(game.user2.get().name)))
+        return GameForms(game_forms=game_forms)
 
     @endpoints.method(request_message=MAKE_MOVE_REQUEST,
                       response_message=GameForm,

@@ -94,7 +94,7 @@ class GameForm(messages.Message):
 
 class GameForms(messages.Message):
     """Return multiple GameForms"""
-    game_form = messages.MessageField(GameForm, 1, repeated=True)
+    game_forms = messages.MessageField(GameForm, 1, repeated=True)
 
 
 class NewGameForm(messages.Message):
